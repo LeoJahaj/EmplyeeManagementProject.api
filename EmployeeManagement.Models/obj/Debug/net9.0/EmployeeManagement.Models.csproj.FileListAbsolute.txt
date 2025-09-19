@@ -12,3 +12,4 @@ C:\Users\USER\Desktop\Rest Api project\EmployeeManagement.Models\obj\Debug\net9.
 C:\Users\USER\Desktop\Rest Api project\EmployeeManagement.Models\obj\Debug\net9.0\EmployeeManagement.Models.pdb
 C:\Users\USER\Desktop\Rest Api project\EmployeeManagement.Models\obj\Debug\net9.0\EmployeeManagement.Models.genruntimeconfig.cache
 C:\Users\USER\Desktop\Rest Api project\EmployeeManagement.Models\obj\Debug\net9.0\ref\EmployeeManagement.Models.dll
+C:\Users\USER\Desktop\Rest Api project\EmployeeManagement.Models\obj\Debug\net9.0\EmployeeManagement.Models.sourcelink.json
