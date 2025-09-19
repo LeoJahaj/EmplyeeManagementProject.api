@@ -1,0 +1,133 @@
+## Project Plan (Backend first, then simple React UI)
+
+### 1) Scope and Success Criteria
+- **Backend**: REST API for employee administration with JWT auth, roles (Administrator, Employee), profiles, projects, tasks.
+- **Business rules**:
+  - **Employee**: update own profile/photo; create tasks only in projects they’re part of; assign tasks only to project members; can’t modify tasks not assigned to them; can mark own tasks completed.
+  - **Administrator**: CRUD users/projects/tasks; add/remove employees to/from projects; create/assign tasks; mark tasks completed/remove; cannot delete projects with any open tasks.
+- **Deliverables**: API with Swagger, exception middleware + logging, EF Core Code-First, Identity, RabbitMQ events, unit tests, Dockerized app (API + SQL Server + RabbitMQ). Minimal React UI for core flows.
+- **Operations**: Daily progress email with GitHub repo link.
+
+### 2) Architecture & Tech
+- **Backend**: ASP.NET Core 9 (Web API), EF Core (Code-First, Migrations), ASP.NET Core Identity.
+- **Database**: SQL Server latest; optional Dapper for read-heavy queries.
+- **Messaging**: RabbitMQ for domain events (TaskCreated/TaskCompleted/etc.).
+- **Docs**: Swagger/Scalar for API documentation.
+- **Testing**: xUnit + FluentAssertions + Moq.
+- **Containers**: Docker + Docker Compose (API, SQL Server, RabbitMQ).
+
+### 3) Solution Structure (target)
+- `EmployeeManagement.api` (Web API)
+  - `Controllers/` Users, Auth, Profiles, Projects, Tasks
+  - `Services/` and `Interfaces/` per domain service
+  - `Middleware/` Exception handling, optional request logging
+  - `DTOs/` Request/response models
+  - `Mappings/` AutoMapper profiles
+  - `Infrastructure/` RabbitMQ publisher, optional Dapper queries
+  - `Configurations/` EF Core entity configs, Identity config, Swagger config
+- `EmployeeManagement.Models` (Class Library)
+  - `Entities/` ApplicationUser, Profile, Project, TaskEntity, ProjectMember (join)
+  - `ApplicationDbContext.cs` + configurations
+  - `Enums/` TaskStatus, Roles
+  - `Validation/` Data annotations
+- `EmployeeManagement.Tests` (Test project)
+  - Unit tests for Services, Middleware, Validators
+- `docker/` compose files, environment samples
+- `docs/` API spec snapshots (optional)
+
+### 4) Data Model (Code-First)
+- **ApplicationUser** (extends IdentityUser): Id, Email, UserName, Role, CreatedAt
+- **Profile**: Id, UserId (FK), FirstName, LastName, Phone, Title, PhotoUrl
+- **Project**: Id, Name, Description, Status (Active/Archived), CreatedById
+- **ProjectMember** (many-to-many): ProjectId, UserId, RoleInProject (optional)
+- **TaskEntity**: Id, ProjectId (FK), Title, Description, AssignedToUserId (nullable), Status (Open/InProgress/Completed), CreatedById, DueDate, CreatedAt, CompletedAt (nullable)
+- **Constraints/Indexes**: Unique(User.Email), optional Unique(Project.Name); indexes on Task.ProjectId, Task.AssignedToUserId
+- **Rule**: Prevent delete of Project with any TaskEntity where Status != Completed
+
+### 5) Security & Authorization
+- **JWT** auth with ASP.NET Core Identity
+- **Roles**: Administrator, Employee
+- **Policies**:
+  - Employee can modify only own profile
+  - Employee can create/assign tasks only within member projects
+  - Employee can update only tasks assigned to them (e.g., mark Completed)
+  - Admin full CRUD with guard on Project delete if open tasks exist
+- **Seed** admin user + roles on first run
+
+### 6) API Endpoints (initial)
+- `POST /api/auth/login` → JWT token
+- **Users (Admin)**: `GET /api/users`, `POST /api/users`, `PUT /api/users/{id}`, `DELETE /api/users/{id}`
+- **Profiles**: `GET /api/profiles/me`, `PUT /api/profiles/me`, `POST /api/profiles/me/photo`
+- **Projects**: `GET /api/projects`, `GET /api/projects/{id}`, `POST /api/projects` (Admin), `PUT /api/projects/{id}` (Admin), `DELETE /api/projects/{id}` (Admin, blocked if open tasks), `POST /api/projects/{id}/members`, `DELETE /api/projects/{id}/members/{userId}`
+- **Tasks**: `GET /api/projects/{projectId}/tasks`, `POST /api/projects/{projectId}/tasks`, `PUT /api/tasks/{taskId}`, `POST /api/tasks/{taskId}/assign/{userId}`, `POST /api/tasks/{taskId}/complete`, `DELETE /api/tasks/{taskId}`
+
+### 7) Services Layer (interfaces + implementations)
+- `IUserService`: create/update/delete, list, role assignments, seeding
+- `IProfileService`: get/update profile, upload photo
+- `IProjectService`: CRUD, add/remove members, delete guard
+- `ITaskService`: CRUD, assign, complete, visibility rules
+- `IAuthService`: login, token generation, password checks
+- `IEventBus` + `IRabbitMqClient`: publish domain events
+- Optional `IQueryService` with Dapper for reads
+
+### 8) Cross-Cutting
+- **Exception middleware**: map domain errors to HTTP codes; log via `ILogger`
+- **Validation**: DataAnnotations (+ optional FluentValidation)
+- **AutoMapper** for DTO ↔ Entity
+- **Swagger/Scalar**: auth scheme, examples, constraints
+- **Logging**: structured logs; optional correlation id
+- **File storage** for profile photos: local `wwwroot/uploads` with abstraction
+
+### 9) Events (RabbitMQ)
+- Events: TaskCreated, TaskAssigned, TaskCompleted, ProjectMemberAdded/Removed
+- Publisher in services; simple consumer/logging subscriber (optional)
+- Exchange type: topic; routing keys like `tasks.created`, `tasks.completed`
+
+### 10) Testing Strategy
+- **Unit tests**: services (rules/authorization), middleware (exception mapping), validators (DTOs)
+- **Integration tests** (optional phase 2): InMemory/Testcontainers SQL Server; endpoint tests with auth
+
+### 11) Docker & DevOps
+- Dockerfile (multi-stage) for API
+- Docker Compose for `api`, `sqlserver`, `rabbitmq`
+- Environment via `appsettings.Development.json` + `.env` (local)
+- Scripts: apply migrations, seed admin
+- Future CI: build, test, docker build
+
+### 12) Implementation Phases (Backend-first)
+1. Repo setup, solution layout, README scaffold
+2. Identity + JWT login; roles + seeding; Swagger auth
+3. EF Core models, configurations, migrations, constraints
+4. Profiles service/controller + photo upload
+5. Projects service/controller + membership mgmt + delete guard
+6. Tasks service/controller + assignment + completion + visibility rules
+7. Exception middleware, logging, validation; refine Swagger
+8. RabbitMQ event publishing + simple consumer/logging
+9. Unit tests on core services; stabilize API
+10. Dockerize (API + SQL + RabbitMQ), compose up; docs
+11. Optional Dapper reads for task lists/dashboards
+
+### 13) Minimal React UI (after backend)
+- **Tech**: Vite + React + TypeScript + React Router + Axios
+- **Pages**: Login; My Profile; Projects list/detail; Tasks per project; Admin (Users CRUD, membership, tasks)
+- **Auth**: JWT storage, guards, role-based routing; basic MUI/Ant Design UI
+
+### 14) Documentation & Ops
+- Swagger/Scalar at `/swagger` or `/docs`
+- README: setup, migrations, seeding admin, run with/without Docker, env variables
+- Daily email: progress summary + GitHub repo link
+
+### 15) Acceptance Checks
+- JWT login works; role policies enforced
+- Employee cannot modify tasks not assigned to them
+- Employee can only create/assign tasks within their projects
+- Admin cannot delete projects with open tasks
+- Swagger covers endpoints with examples; errors mapped via middleware
+- Events published and visible in RabbitMQ management UI
+- Unit tests pass; app runs via Docker Compose
+
+—
+
+Tell me which sections you want to start with, and I’ll begin implementation.
+
+
